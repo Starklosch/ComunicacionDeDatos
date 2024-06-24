@@ -14,6 +14,14 @@ class FindDevicesViewModel(application: Application) : AndroidViewModel(applicat
         nsd.discoveredServicesUpdated = {
             _services.value = it.toList()
         }
+        startDiscovery()
+    }
+
+    fun startDiscovery(){
         nsd.discover("esp32", "tcp")
+    }
+
+    fun stopDiscovery(){
+        nsd.stop()
     }
 }

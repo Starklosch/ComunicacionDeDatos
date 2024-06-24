@@ -1,5 +1,6 @@
 package com.starklosch.comunicacion
 
+import android.util.Log
 import androidx.compose.ui.graphics.Color
 import java.io.PrintWriter
 import java.net.InetSocketAddress

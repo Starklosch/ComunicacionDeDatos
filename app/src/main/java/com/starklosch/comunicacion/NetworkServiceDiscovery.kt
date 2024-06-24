@@ -27,8 +27,12 @@ class NetworkServiceDiscovery(context: Context) : Closeable {
         )
     }
 
-    override fun close() {
+    fun stop(){
         nsdManager.stopServiceDiscovery(discoveryListener)
+    }
+
+    override fun close() {
+        stop()
     }
 
     private val resolver: Resolver =

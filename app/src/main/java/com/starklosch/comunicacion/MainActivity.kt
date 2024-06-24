@@ -1,6 +1,7 @@
 package com.starklosch.comunicacion
 
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,7 +29,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -73,19 +76,35 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun App(viewModel: MainViewModel = viewModel()) {
+fun App(viewModel: MainViewModel = viewModel(), findDevicesViewModel: FindDevicesViewModel = viewModel()) {
+    val context = LocalContext.current
     val connected by viewModel.connected.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val color by viewModel.color.collectAsState()
+    val on by viewModel.on.collectAsState()
+    val errorUnread by viewModel.errorUnread.collectAsState()
 
-    if (connected)
-        Device(viewModel)
+    val services by findDevicesViewModel.services.collectAsState()
+
+    var selecting by rememberSaveable {
+        mutableStateOf(true)
+    }
+
+    if (selecting)
+        DevicePicker({ selecting = false; viewModel.connect(it) }, services)
     else
-        DevicePicker(viewModel)
+        Device(color, on, connected, { viewModel.setOn(!on) }, { viewModel.setColor(it) })
+
+    LaunchedEffect(error, errorUnread) {
+        if (errorUnread && !error.isNullOrBlank()) {
+            Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+            viewModel.markErrorAsRead()
+        }
+    }
 }
 
 @Composable
-fun DevicePicker(mainViewModel: MainViewModel, nsdViewModel: FindDevicesViewModel = viewModel()) {
-    val services by nsdViewModel.services.collectAsState()
-
+fun DevicePicker(onDeviceSelected: (String) -> Unit, services: List<ServiceInfo>) {
     Column(
         Modifier
             .fillMaxSize()
@@ -102,7 +121,7 @@ fun DevicePicker(mainViewModel: MainViewModel, nsdViewModel: FindDevicesViewMode
 
             items(services) {
                 Card(onClick = {
-                    mainViewModel.connect(it.addresses.first())
+                    onDeviceSelected(it.addresses.first())
                 }, Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(24.dp)) {
                         val name = it.name
@@ -118,12 +137,10 @@ fun DevicePicker(mainViewModel: MainViewModel, nsdViewModel: FindDevicesViewMode
 
 
 @Composable
-fun Device(viewModel: MainViewModel = viewModel()) {
-    val context = LocalContext.current
-    val currentColor by viewModel.color.collectAsState()
-    val on by viewModel.on.collectAsState()
-    val connected by viewModel.connected.collectAsState()
-    val error by viewModel.error.collectAsState()
+fun Device(
+    currentColor: Color, on: Boolean, connected: Boolean, onToggleClick: () -> Unit,
+    onColorChanged: (Color) -> Unit
+) {
 
     var hue by rememberSaveable {
         mutableFloatStateOf(0f)
@@ -141,7 +158,7 @@ fun Device(viewModel: MainViewModel = viewModel()) {
         mutableStateOf(false)
     }
 
-    LaunchedEffect(key1 = true) {
+    LaunchedEffect(key1 = currentColor) {
         if (currentColor == Color.hsv(hue, saturation, brightness))
             return@LaunchedEffect
 
@@ -170,12 +187,6 @@ fun Device(viewModel: MainViewModel = viewModel()) {
             else -> 1 - min / max
         }
         brightness = max
-    }
-
-    LaunchedEffect(key1 = error) {
-        if (!error.isNullOrBlank()) {
-            Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
-        }
     }
 
     val estado = when {
@@ -230,19 +241,17 @@ fun Device(viewModel: MainViewModel = viewModel()) {
             }
         }
         Column(Modifier.width(IntrinsicSize.Max)) {
-            Button(onClick = { viewModel.setOn(!on) }, Modifier.fillMaxWidth()) {
+            Button(onClick = onToggleClick, Modifier.fillMaxWidth()) {
                 Text(text = if (on) "Apagar" else "Encender")
             }
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = {
                 if (picking)
-                    viewModel.setColor(
-                        Color.hsv(
-                            hue,
-                            saturation,
-                            brightness
-                        )
-                    )
+                    onColorChanged(Color.hsv(
+                        hue,
+                        saturation,
+                        brightness
+                    ))
                 picking = !picking
             }, Modifier.fillMaxWidth()) {
                 Text(text = if (picking) "Aceptar" else "Cambiar color")
@@ -254,9 +263,31 @@ fun Device(viewModel: MainViewModel = viewModel()) {
 
 @Preview(showBackground = true)
 @Composable
-fun GreetingPreview() {
+fun DevicePreview() {
+    var connected by remember {
+        mutableStateOf(true)
+    }
+    var color by remember {
+        mutableStateOf(Color.Red)
+    }
+    var on by remember {
+        mutableStateOf(true)
+    }
+
     ComunicacionTheme {
-        Device()
+        Device(color, on, connected, { on = !on }, { color = it })
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DevicePickerPreview() {
+    val services = listOf(
+        ServiceInfo("Dispositivo 1", "Tipo", 80, listOf("192.168.0.2")),
+        ServiceInfo("Dispositivo 2", "Tipo", 80, listOf("192.168.0.3"))
+    )
+    ComunicacionTheme {
+        DevicePicker({ }, services)
     }
 }
 
